@@ -7,7 +7,7 @@ import os
 
 music_url = input("Ссылка на музыку soundcloud: ")
 
-ffmpeg_path = 'C:\\Users\\User\\Desktop\\tg_bot_ckr\\ffmpeg\\bin\\ffmpeg.exe'
+ffmpeg_path = 'ПУТЬ ДО ffmpeg.exe'
 soup = BeautifulSoup(requests.get(music_url,headers={"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/536.30.1 (KHTML, like Gecko) Version/6.0.5 Safari/536.30.1"}).content, 'html.parser')
 json_pattern = re.compile(r'window\.__sc_hydration\s*=\s*(\[\{.*?\}\]);', re.DOTALL)
 track_auth_pattern = re.compile(r'"track_authorization":\s*"([^"]+)"')
