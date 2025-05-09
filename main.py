@@ -65,7 +65,7 @@ async def main():
                         (
                             ffmpeg
                             .input(m3u8_url)
-                            .output(output_file, acodec='libmp3lame', audio_bitrate='192k')
+                            .output(output_file)
                             .overwrite_output()
                             .run(cmd=ffmpeg_path)
                         )
