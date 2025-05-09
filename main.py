@@ -40,7 +40,7 @@ async def get_soundcloud_client_id():
 
 async def main():
     music_url = input("Ссылка на музыку soundcloud: ")
-    ffmpeg_path = 'E:\\rab_stol\\soundcloud_dowload_track-main\\ffmpeg\\bin\\ffmpeg.exe'
+    ffmpeg_path = 'ВАШ ПУТЬ К ffmpeg.exe'
     async with aiohttp.ClientSession() as session:
         soup = BeautifulSoup(await (await session.get(music_url,headers={"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/536.30.1 (KHTML, like Gecko) Version/6.0.5 Safari/536.30.1"})).text(), 'html.parser')
         
