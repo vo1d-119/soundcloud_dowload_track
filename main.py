@@ -1,58 +1,99 @@
-import requests
+import aiofiles
 from bs4 import BeautifulSoup
 import json
 import re
 import ffmpeg
 import os
+import aiohttp
+import asyncio
 
-music_url = input("Ссылка на музыку soundcloud: ")
+async def get_soundcloud_client_id():
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get('https://soundcloud.com') as response:
+                if response.status != 200:
+                    raise Exception(f"Ошибка: {response.status}")
+                html = await response.text()
 
-ffmpeg_path = 'ПУТЬ ДО ffmpeg.exe'
-soup = BeautifulSoup(requests.get(music_url,headers={"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/536.30.1 (KHTML, like Gecko) Version/6.0.5 Safari/536.30.1"}).content, 'html.parser')
-json_pattern = re.compile(r'window\.__sc_hydration\s*=\s*(\[\{.*?\}\]);', re.DOTALL)
-track_auth_pattern = re.compile(r'"track_authorization":\s*"([^"]+)"')
+            script_pattern = re.compile(r'<script[^>]+src="([^"]+)"', re.IGNORECASE)
+            script_urls = script_pattern.findall(html)
 
-for script in soup.find_all('script'):
-    script_text = script.string
-    if script_text:
-        match = json_pattern.search(script_text)
-        if match:
-            try:
-                for item in json.loads(match.group(1)):
-                    if 'data' in item and 'media' in item['data']:
-                        for transcoding in item['data']['media'].get('transcodings', []):
-                            if transcoding['format']['protocol'] == 'hls':
-                                hls_url = transcoding['url']
-                                break
-                track_auth_match = track_auth_pattern.search(script_text)
-                if track_auth_match:
-                    track_authorization = track_auth_match.group(1)
+            for url in script_urls:
+                if not url.startswith(('https://a-v2.sndcdn.com', 'https://a1.sndcdn.com')):
+                    continue
 
-                temp_files = []
-                for i, url in enumerate([line for line in requests.get(requests.get(f"{hls_url}?client_id=H8sYVN4CJ2E8Ij83bJZ1OtB9w4kzyyvy&track_authorization={track_authorization}",headers={"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/536.30.1 (KHTML, like Gecko) Version/6.0.5 Safari/536.30.1"}).json()["url"]).text.splitlines() if line.startswith("http")]):
-                    temp_file = f"temp_{i}.BY_VOID"
-                    temp_files.append(temp_file)
-                    with requests.get(url, stream=True) as r:
-                        with open(temp_file, 'wb') as f:
-                            f.write(r.content)
+                try:
+                    async with session.get(url) as script_response:
+                        if script_response.status != 200:
+                            continue
+                        script_text = await script_response.text()
 
-                with open("file_list.txt", "w") as file_list:
-                    for temp_file in temp_files:
-                        file_list.write(f"file '{temp_file}'\n")
+                        client_id_match = re.search(r'client_id\s*:\s*"([0-9a-zA-Z]{32})"', script_text)
+                        if client_id_match:
+                            return client_id_match.group(1)
 
-                output_file = "output.mp3"
-                (
-                    ffmpeg
-                    .input('file_list.txt', format='concat', safe=0)
-                    .output(output_file, codec='copy')
-                    .run(cmd=ffmpeg_path)
-                )
+                except Exception as e:
+                    continue
 
-                for temp_file in temp_files:
-                    os.remove(temp_file)
-                os.remove("file_list.txt")
+            raise Exception("Client ID не найден")
 
-                print(f"Конвертация завершена! Файл сохранен как {output_file}")
-            except json.JSONDecodeError as e:
-                print(f'Ошибка декодирования JSON: {e}')
-            break 
+        except Exception as e:
+            raise Exception(f"Ошибка при получении client_id: {str(e)}")
+
+async def main():
+    music_url = input("Ссылка на музыку soundcloud: ")
+    ffmpeg_path = 'ВАШ ПУТЬ К ffmpeg.exe'
+    async with aiohttp.ClientSession() as session:
+        soup = BeautifulSoup(await (await session.get(music_url,headers={"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/536.30.1 (KHTML, like Gecko) Version/6.0.5 Safari/536.30.1"})).text(), 'html.parser')
+        
+        for script in soup.find_all('script'):
+            if script.string:
+                match = re.compile(r'window\.__sc_hydration\s*=\s*(\[\{.*?\}\]);', re.DOTALL).search(script.string)
+                if match:
+                    try:
+                        for item in json.loads(match.group(1)):
+                            if 'data' in item and 'media' in item['data']:
+                                for transcoding in item['data']['media'].get('transcodings', []):
+                                    if transcoding['format']['protocol'] == 'hls':
+                                        hls_url = transcoding['url']
+                                        break
+                        track_auth_match = re.compile(r'"track_authorization":\s*"([^"]+)"').search(script.string)
+                        if track_auth_match:
+                            track_authorization = track_auth_match.group(1)
+
+                        temp_files = []
+                
+                        for i, url in enumerate([line for line in (await(await(session.get((await (await session.get(f"{hls_url}?client_id={await get_soundcloud_client_id()}&track_authorization={track_authorization}",headers={"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/536.30.1 (KHTML, like Gecko) Version/6.0.5 Safari/536.30.1"})).json())["url"]))).text()).splitlines() if line.startswith("http")]):
+                            print(1)
+                            temp_file = f"temp_{i}.BY_VOID"
+                            temp_files.append(temp_file)
+                            async with session.get(url) as response:
+                                async with aiofiles.open(temp_file, 'wb') as f:
+                                    while True:
+                                        chunk = await response.content.read(8192)
+                                        if not chunk:
+                                            break
+                                        await f.write(chunk)
+
+                        async with aiofiles.open("file_list.txt", 'w') as file_list:
+                            for temp_file in temp_files:
+                                await file_list.write(f"file '{temp_file}'\n")
+
+                        output_file = "output.mp3"
+                        (
+                            ffmpeg
+                            .input('file_list.txt', format='concat', safe=0)
+                            .output(output_file, codec='copy')
+                            .run(cmd=ffmpeg_path)
+                        )
+
+                        for temp_file in temp_files:
+                            os.remove(temp_file)
+                        os.remove("file_list.txt")
+
+                        print(f"Конвертация завершена! Файл сохранен как {output_file}")
+                    except json.JSONDecodeError as e:
+                        print(f'Ошибка декодирования JSON: {e}')
+                    break 
+
+asyncio.run(main())
