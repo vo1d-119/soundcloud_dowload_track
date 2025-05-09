@@ -1,9 +1,7 @@
-import aiofiles
 from bs4 import BeautifulSoup
 import json
 import re
 import ffmpeg
-import os
 import aiohttp
 import asyncio
 
@@ -42,7 +40,7 @@ async def get_soundcloud_client_id():
 
 async def main():
     music_url = input("Ссылка на музыку soundcloud: ")
-    ffmpeg_path = 'ВАШ ПУТЬ К ffmpeg.exe'
+    ffmpeg_path = 'E:\\rab_stol\\soundcloud_dowload_track-main\\ffmpeg\\bin\\ffmpeg.exe'
     async with aiohttp.ClientSession() as session:
         soup = BeautifulSoup(await (await session.get(music_url,headers={"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/536.30.1 (KHTML, like Gecko) Version/6.0.5 Safari/536.30.1"})).text(), 'html.parser')
         
@@ -60,36 +58,17 @@ async def main():
                         track_auth_match = re.compile(r'"track_authorization":\s*"([^"]+)"').search(script.string)
                         if track_auth_match:
                             track_authorization = track_auth_match.group(1)
-
-                        temp_files = []
                 
-                        for i, url in enumerate([line for line in (await(await(session.get((await (await session.get(f"{hls_url}?client_id={await get_soundcloud_client_id()}&track_authorization={track_authorization}",headers={"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/536.30.1 (KHTML, like Gecko) Version/6.0.5 Safari/536.30.1"})).json())["url"]))).text()).splitlines() if line.startswith("http")]):
-                            print(1)
-                            temp_file = f"temp_{i}.BY_VOID"
-                            temp_files.append(temp_file)
-                            async with session.get(url) as response:
-                                async with aiofiles.open(temp_file, 'wb') as f:
-                                    while True:
-                                        chunk = await response.content.read(8192)
-                                        if not chunk:
-                                            break
-                                        await f.write(chunk)
-
-                        async with aiofiles.open("file_list.txt", 'w') as file_list:
-                            for temp_file in temp_files:
-                                await file_list.write(f"file '{temp_file}'\n")
+                        m3u8_url = (await (await session.get(f"{hls_url}?client_id={await get_soundcloud_client_id()}&track_authorization={track_authorization}",headers={"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/536.30.1 (KHTML, like Gecko) Version/6.0.5 Safari/536.30.1"})).json())["url"]
 
                         output_file = "output.mp3"
                         (
                             ffmpeg
-                            .input('file_list.txt', format='concat', safe=0)
-                            .output(output_file, codec='copy')
+                            .input(m3u8_url)
+                            .output(output_file, acodec='libmp3lame', audio_bitrate='192k')
+                            .overwrite_output()
                             .run(cmd=ffmpeg_path)
                         )
-
-                        for temp_file in temp_files:
-                            os.remove(temp_file)
-                        os.remove("file_list.txt")
 
                         print(f"Конвертация завершена! Файл сохранен как {output_file}")
                     except json.JSONDecodeError as e:
